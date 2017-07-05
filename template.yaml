@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: Template
+metadata:
+  name: weechat
+objects:
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    labels:
+      app: weechat
+    name: weechat
+  spec:
+    tags:
+    - from:
+        kind: DockerImage
+        name: vagrant/weechat
+      name: latest
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    annotations:
+    creationTimestamp: null
+    generation: 2
+    labels:
+      app: weechat
+    name: weechat
+  spec:
+    replicas: 1
+    selector:
+      app: weechat
+      deploymentconfig: weechat
+    strategy:
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: weechat
+          deploymentconfig: weechat
+      spec:
+        containers:
+        - image: vagrant/weechat
+          imagePullPolicy: Never
+          name: weechat-container
+          tty: true
+          stdin: true
+          command: ["/bin/bash"]
+          args: ["-c", "tmux new-session -d weechat && sleep infinity"]
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
