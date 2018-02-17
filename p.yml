@@ -1,0 +1,35 @@
+---
+- hosts: localhost
+  connection: local
+  vars:
+    image: fedora:27
+    pull_form: "docker://{{ image }}"  # docker registry
+    container_name: build_container
+    image_name: weechat
+    role: ansible-weechat-role
+  tasks:
+  - name: Remove former build container
+    command: 'buildah rm {{ container_name }}'
+    become: true
+    ignore_errors: yes
+
+  - name: Obtain base image and create a container out of it
+    command: 'buildah from --name {{ container_name }} {{ pull_form }}'
+    become: true
+
+  - name: Add the newly created container to the inventory
+    add_host:
+      hostname: '{{ container_name }}'
+      ansible_connection: 'buildah'
+      ansible_python_interpreter: /usr/bin/python3  # fedora container doesn't ship python2
+
+  - name: Run the role in the container
+    delegate_to: '{{ container_name }}'
+    include_role:
+      name: "{{ role }}"
+
+  - block:
+    - name: Change default command of the container image
+      command: 'buildah config --cmd "nginx -g \"daemon off;\"" {{ container_name }}'
+    - name: Commit the container and make it an image
+      command: 'buildah commit --rm {{ container_name }} docker-daemon:{{ image_name }}:latest'
