@@ -1,7 +1,7 @@
 IMAGE_NAME := ${USER}/weechat
 
 build:
-	ansible-playbook ./p.yml
+	ansible-playbook -vv ./p.yml
 
 run:
 	docker run --rm -ti $(IMAGE_NAME)

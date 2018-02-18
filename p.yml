@@ -4,32 +4,51 @@
   vars:
     image: fedora:27
     pull_form: "docker://{{ image }}"  # docker registry
-    container_name: build_container
-    image_name: weechat
+    build_container_name: build_container
+    weechat_container_name: weechat
+    image_name: weechat:latest
     role: ansible-weechat-role
+    container_username: tt
+    timezone: Europe/Bratislava
   tasks:
   - name: Remove former build container
-    command: 'buildah rm {{ container_name }}'
+    command: 'buildah rm {{ build_container_name }}'
     become: true
     ignore_errors: yes
 
   - name: Obtain base image and create a container out of it
-    command: 'buildah from --name {{ container_name }} {{ pull_form }}'
+    command: 'buildah from --name {{ build_container_name }} {{ pull_form }}'
     become: true
 
   - name: Add the newly created container to the inventory
     add_host:
-      hostname: '{{ container_name }}'
+      hostname: '{{ build_container_name }}'
       ansible_connection: 'buildah'
       ansible_python_interpreter: /usr/bin/python3  # fedora container doesn't ship python2
 
+  - name: Gather facts from the container
+    delegate_to: '{{ build_container_name }}'
+    delegate_facts: yes
+    setup: {}
+
   - name: Run the role in the container
-    delegate_to: '{{ container_name }}'
+    delegate_to: '{{ build_container_name }}'
     include_role:
       name: "{{ role }}"
+    vars:
+      username: "{{ container_username }}"
 
-  - block:
-    - name: Change default command of the container image
-      command: 'buildah config --cmd "nginx -g \"daemon off;\"" {{ container_name }}'
-    - name: Commit the container and make it an image
-      command: 'buildah commit --rm {{ container_name }} docker-daemon:{{ image_name }}:latest'
+  - name: Change default command of the container image
+    command: 'buildah config --cmd "weechat" --user {{ container_username }} -e "TZ={{ timezone }}" {{ build_container_name }}'
+  - name: Commit the container and make it an image
+    command: 'buildah commit --rm {{ build_container_name }} {{ image_name }}'
+
+  - name: Primetime!
+    command: "podman run -ti -v {{ weechat_runtime_data }}:/home/{{ username }}/.weechat --name {{ weechat_container_name }} -d {{ image_name }}"
+    become: true
+
+# TODO: https://github.com/projectatomic/libpod/issues/351#issuecomment-366499920
+#       will exec work? is it the same tty?
+
+  - debug:
+      msg: "You can now access your weechat via 'sudo podman attach {{ weechat_container_name }}'"
